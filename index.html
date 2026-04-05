@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>客户续保数据可视化</title>
+    <!-- 引入 ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <!-- 引入 Bootstrap 样式 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background-color: #111827;
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            min-height: 100vh;
+            color: #e5e7eb;
+            overflow: auto;
+        }
+        
+        .container {
+            width: 100vw;
+            min-height: 100vh;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background-color: #1e293b;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            flex-shrink: 0;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 20px;
+            color: #38bdf8;
+            text-align: center;
+        }
+        
+        .header .time {
+            text-align: right;
+            color: #94a3b8;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        
+        .charts-wrapper {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: auto auto auto;
+            gap: 15px;
+        }
+        
+        .chart-container {
+            background-color: #1e293b;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            height: 400px;
+        }
+        
+        .chart-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #e5e7eb;
+            flex-shrink: 0;
+        }
+        
+        .chart-content {
+            flex: 1;
+            width: 100%;
+            height: calc(100% - 30px);
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .row {
+                flex-direction: column;
+            }
+            
+            .header h1 {
+                font-size: 18px;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .header h1 {
+                font-size: 16px;
+            }
+            
+            .chart-title {
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>客户续保数据可视化</h1>
+            <div class="time" id="current-time"></div>
+        </div>
+        
+        <div class="charts-wrapper">
+            <!-- 第一行：整体续保占比 + 投保人年龄分布 + 收入水平与续保结构 -->
+            <div class="chart-container" style="grid-column: 1;">
+                <div class="chart-title">整体续保占比</div>
+                <div id="renewalChart" class="chart-content"></div>
+            </div>
+            <div class="chart-container" style="grid-column: 2;">
+                <div class="chart-title">投保人年龄分布</div>
+                <div id="ageChart" class="chart-content"></div>
+            </div>
+            <div class="chart-container" style="grid-column: 3;">
+                <div class="chart-title">收入水平与续保结构</div>
+                <div id="incomeChart" class="chart-content"></div>
+            </div>
+            
+            <!-- 第二行：性别与续保对比 + 职业分布 Top5 + 逻辑回归系数分析 -->
+            <div class="chart-container" style="grid-column: 1;">
+                <div class="chart-title">性别与续保对比</div>
+                <div id="genderChart" class="chart-content"></div>
+            </div>
+            <div class="chart-container" style="grid-column: 2;">
+                <div class="chart-title">职业分布 Top5（保单量）</div>
+                <div id="occupationChart" class="chart-content"></div>
+            </div>
+            <div class="chart-container" style="grid-column: 3;">
+                <div class="chart-title">逻辑回归系数分析</div>
+                <div id="logisticChart" class="chart-content"></div>
+            </div>
+            
+            <!-- 第三行：决策树特征重要性 + 新客户续保预测 + 新客户年龄分布 -->
+            <div class="chart-container" style="grid-column: 1;">
+                <div class="chart-title">决策树特征重要性</div>
+                <div id="decisionTreeChart" class="chart-content"></div>
+            </div>
+            <div class="chart-container" style="grid-column: 2;">
+                <div class="chart-title">新客户续保预测</div>
+                <div id="newCustomerChart" class="chart-content"></div>
+            </div>
+            <div class="chart-container" style="grid-column: 3;">
+                <div class="chart-title">新客户年龄分布</div>
+                <div id="newCustomerAgeChart" class="chart-content"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 全局变量
+        const themeColor = '#38bdf8';
+        const secondaryColor = '#f97316';
+        let charts = {};
+        
+        /**
+         * 更新当前时间
+         */
+        function updateTime() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('current-time').textContent = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        }
+        
+        /**
+         * 初始化图表
+         */
+        function initCharts() {
+            charts.ageChart = echarts.init(document.getElementById('ageChart'));
+            charts.genderChart = echarts.init(document.getElementById('genderChart'));
+            charts.incomeChart = echarts.init(document.getElementById('incomeChart'));
+            charts.occupationChart = echarts.init(document.getElementById('occupationChart'));
+            charts.renewalChart = echarts.init(document.getElementById('renewalChart'));
+            charts.logisticChart = echarts.init(document.getElementById('logisticChart'));
+            charts.decisionTreeChart = echarts.init(document.getElementById('decisionTreeChart'));
+            charts.newCustomerChart = echarts.init(document.getElementById('newCustomerChart'));
+            charts.newCustomerAgeChart = echarts.init(document.getElementById('newCustomerAgeChart'));
+        }
+        
+        /**
+         * 调整图表大小以适应容器
+         */
+        function resizeCharts() {
+            Object.values(charts).forEach(chart => chart.resize());
+        }
+        
+        /**
+         * 配置整体续保占比图表
+         * @param {Object} data - 数据源
+         */
+        function configureRenewalChart(data) {
+            const renewalRate = (data.renewal_distribution[0].count / (data.renewal_distribution[0].count + data.renewal_distribution[1].count)) * 100;
+            
+            charts.renewalChart.setOption({
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{a} <br/>{b}: {c} ({d}%)'
+                },
+                series: [{
+                    name: '续保情况',
+                    type: 'gauge',
+                    startAngle: 90,
+                    endAngle: -270,
+                    radius: '80%',
+                    center: ['50%', '50%'],
+                    pointer: {
+                        show: false
+                    },
+                    progress: {
+                        show: true,
+                        overlap: false,
+                        roundCap: true,
+                        clip: false,
+                        itemStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                                {offset: 0, color: '#38bdf8'},
+                                {offset: 1, color: '#0ea5e9'}
+                            ])
+                        }
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            width: 15,
+                            color: [[1, '#334155']]
+                        }
+                    },
+                    splitLine: {
+                        show: false
+                    },
+                    axisTick: {
+                        show: false
+                    },
+                    axisLabel: {
+                        show: false
+                    },
+                    data: [{
+                        value: renewalRate,
+                        name: '续保率',
+                        title: {
+                            offsetCenter: ['0%', '-10%'],
+                            fontSize: 18,
+                            color: '#e5e7eb',
+                            fontWeight: 'bold'
+                        },
+                        detail: {
+                            valueAnimation: true,
+                            fontSize: 48,
+                            offsetCenter: ['0%', '20%'],
+                            color: '#38bdf8',
+                            formatter: '{value}%',
+                            fontWeight: 'bold'
+                        }
+                    }]
+                }]
+            });
+        }
+        
+        /**
+         * 配置投保人年龄分布图表
+         * @param {Object} data - 数据源
+         */
+        function configureAgeChart(data) {
+            charts.ageChart.setOption({
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: data.age_distribution.map(item => item.age),
+                    axisLabel: {
+                        color: '#94a3b8'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#334155'
+                        }
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: {
+                        color: '#94a3b8'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#334155'
+                        }
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: '#334155',
+                            type: 'dashed'
+                        }
+                    }
+                },
+                series: [{
+                    data: data.age_distribution.map(item => item.count),
+                    type: 'bar',
+                    itemStyle: {
+                        color: themeColor
+                    },
+                    label: {
+                        show: true,
+                        position: 'top',
+                        color: '#e5e7eb',
+                        fontSize: 10
+                    }
+                }]
+            });
+        }
+        
+        /**
+         * 配置收入水平与续保结构图表
+         * @param {Object} data - 数据源
+         */
+        function configureIncomeChart(data) {
+            // 模拟数据
+            const renewalData = [150, 200, 250];
+            const nonRenewalData = [50, 80, 100];
+            
+            charts.incomeChart.setOption({
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                legend: {
+                    data: ['续保', '未续保'],
+                    textStyle: {
+                        color: '#94a3b8'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['低', '中', '高'],
+                    axisLabel: {
+                        color: '#94a3b8'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#334155'
+                        }
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: {
+                        color: '#94a3b8'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#334155'
+                        }
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: '#334155',
+                            type: 'dashed'
+                        }
+                    }
+                },
+                series: [
+                    {
+                        name: '续保',
+                        type: 'bar',
+                        data: renewalData,
+                        itemStyle: {
+                            color: themeColor
+                        },
+                        label: {
+                            show: true,
+                            position: 'top',
+                            color: '#e5e7eb',
+                            fontSize: 10
+                        }
+                    },
+                    {
+                        name: '未续保',
+                        type: 'bar',
+                        data: nonRenewalData,
+                        itemStyle: {
+                            color: secondaryColor
+                        },
+                        label: {
+                            show: true,
+                            position: 'top',
+                            color: '#e5e7eb',
+                            fontSize: 10
+                        }
+                    }
+                ]
+            });
+        }
+        
+        /**
+         * 配置性别与续保对比图表
+         * @param {Object} data - 数据源
+         */
+        function configureGenderChart(data) {
+            // 模拟数据
+            const renewalData = [300, 250];
+            const nonRenewalData = [100, 80];
+            
+            charts.genderChart.setOption({
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                legend: {
+                    data: ['续保', '未续保'],
+                    textStyle: {
+                        color: '#94a3b8'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['男', '女'],
+                    axisLabel: {
+                        color: '#94a3b8'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#334155'
+                        }
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: {
+                        color: '#94a3b8'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#334155'
+                        }
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: '#334155',
+                            type: 'dashed'
+                        }
+                    }
+                },
+                series: [
+                    {
+                        name: '续保',
+                        type: 'bar',
+                        data: renewalData,
+                        itemStyle: {
+                            color: themeColor
+                        },
+                        label: {
+                            show: true,
+                            position: 'top',
+                            color: '#e5e7eb',
+                            fontSize: 10
+                        }
+                    },
+                    {
+                        name: '未续保',
+                        type: 'bar',
+                        data: nonRenewalData,
+                        itemStyle: {
+                            color: secondaryColor
+                        },
+                        label: {
+                            show: true,
+                            position: 'top',
+                            color: '#e5e7eb',
+                            fontSize: 10
+                        }
+                    }
+                ]
+            });
+        }
+        
+        /**
+         * 配置职业分布 Top5 图表
+         * @param {Object} data - 数据源
+         */
+        function configureOccupationChart(data) {
+            // 添加错误处理，确保即使数据不存在也能正常加载
+            if (!data.occupation_distribution || !Array.isArray(data.occupation_distribution)) {
+                console.error('occupation_distribution data is not available');
+                return;
+            }
+            const occupations = data.occupation_distribution.map(item => item.occupation).reverse();
+            const counts = data.occupation_distribution.map(item => item.count).reverse();
+            
+            charts.occupationChart.setOption({
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'value',
+                    axisLabel: {
+                        color: '#94a3b8'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#334155'
+                        }
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: '#334155',
+                            type: 'dashed'
+                        }
+                    }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: occupations,
+                    axisLabel: {
+                        color: '#94a3b8'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#334155'
+                        }
+                    }
+                },
+                series: [{
+                    data: counts,
+                    type: 'bar',
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(1, 0, 0, 0, [
+                            {offset: 0, color: '#38bdf8'},
+                            {offset: 1, color: '#0ea5e9'}
+                        ])
+                    },
+                    label: {
+                        show: true,
+                        position: 'right',
+                        color: '#e5e7eb',
+                        fontSize: 10
+                    }
+                }]
+            });
+        }
+        
+        /**
+         * 配置逻辑回归系数分析图表
+         * @param {Object} data - 数据源
+         */
+        function configureLogisticChart(data) {
+            const logisticData = data.logistic_coefficients;
+            const features = logisticData.map(item => item.feature);
+            const coefficients = logisticData.map(item => item.coefficient);
+            
+            charts.logisticChart.setOption({
+                title: {
+                    text: '逻辑回归系数分析',
+                    subtext: '权重代表特征对续保的影响程度，正数表示正面影响，负数表示负面影响',
+                    left: 'center',
+                    textStyle: {
+                        color: '#e5e7eb'
+                    },
+                    subtextStyle: {
+                        color: '#94a3b8',
+                        fontSize: 12
+                    }
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    },
+                    formatter: function(params) {
+                        return `${params[0].name}: ${params[0].value.toFixed(4)}`;
+                    }
+                },
+                grid: {
+                    left: '20%',
+                    right: '15%',
+                    bottom: '15%',
+                    top: '20%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'value',
+                    axisLabel: {
+                        color: '#94a3b8'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#334155'
+                        }
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: '#334155',
+                            type: 'dashed'
+                        }
+                    }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: features,
+                    axisLabel: {
+                        color: '#94a3b8',
+                        interval: 0,
+                        rotate: 45,
+                        fontSize: 10
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#334155'
+                        }
+                    }
+                },
+                series: [{
+                    data: coefficients,
+                    type: 'bar',
+                    itemStyle: {
+                        color: function(params) {
+                            return params.value >= 0 ? themeColor : secondaryColor;
+                        }
+                    },
+                    label: {
+                        show: true,
+                        position: function(params) {
+                            return params.value >= 0 ? 'right' : 'left';
+                        },
+                        formatter: function(params) {
+                            return params.value.toFixed(4);
+                        },
+                        color: '#e5e7eb',
+                        fontSize: 10
+                    }
+                }]
+            });
+        }
+        
+        /**
+         * 配置决策树特征重要性图表
+         * @param {Object} data - 数据源
+         */
+        function configureDecisionTreeChart(data) {
+            const treeData = data.decision_tree_importance;
+            const features = treeData.map(item => item.feature);
+            const importance = treeData.map(item => item.importance);
+            
+            charts.decisionTreeChart.setOption({
+                title: {
+                    text: '决策树特征重要性',
+                    subtext: '权重代表特征对模型预测的贡献程度，值越大影响越大',
+                    left: 'center',
+                    textStyle: {
+                        color: '#e5e7eb'
+                    },
+                    subtextStyle: {
+                        color: '#94a3b8',
+                        fontSize: 12
+                    }
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                grid: {
+                    left: '15%',
+                    right: '15%',
+                    bottom: '15%',
+                    top: '20%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'value',
+                    axisLabel: {
+                        color: '#94a3b8'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#334155'
+                        }
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: '#334155',
+                            type: 'dashed'
+                        }
+                    }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: features,
+                    axisLabel: {
+                        color: '#94a3b8',
+                        interval: 0,
+                        rotate: 30,
+                        fontSize: 11
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#334155'
+                        }
+                    }
+                },
+                series: [{
+                    data: importance,
+                    type: 'bar',
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(1, 0, 0, 0, [
+                            {offset: 0, color: '#38bdf8'},
+                            {offset: 1, color: '#0ea5e9'}
+                        ])
+                    },
+                    label: {
+                        show: true,
+                        position: 'right',
+                        formatter: function(params) {
+                            return params.value.toFixed(4);
+                        },
+                        color: '#e5e7eb',
+                        fontSize: 10
+                    }
+                }]
+            });
+        }
+        
+        /**
+         * 配置新客户续保预测图表
+         * @param {Object} data - 数据源
+         */
+        function configureNewCustomerChart(data) {
+            const newCustomerData = data.new_customer_analysis;
+            
+            charts.newCustomerChart.setOption({
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{a} <br/>{b}: {c} ({d}%)'
+                },
+                legend: {
+                    orient: 'horizontal',
+                    bottom: '5%',
+                    left: 'center',
+                    textStyle: {
+                        color: '#94a3b8',
+                        fontSize: 12
+                    }
+                },
+                series: [
+                    {
+                        name: '预测续保情况',
+                        type: 'pie',
+                        radius: ['35%', '60%'],
+                        center: ['50%', '50%'],
+                        avoidLabelOverlap: true,
+                        itemStyle: {
+                            borderRadius: 10,
+                            borderColor: '#1e293b',
+                            borderWidth: 2
+                        },
+                        label: {
+                            show: false
+                        },
+                        emphasis: {
+                            label: {
+                                show: true,
+                                fontSize: 14,
+                                fontWeight: 'bold',
+                                color: '#e5e7eb'
+                            }
+                        },
+                        labelLine: {
+                            show: false
+                        },
+                        data: [
+                            {
+                                value: newCustomerData.predicted_renewal,
+                                name: '预测续保',
+                                itemStyle: { color: themeColor }
+                            },
+                            {
+                                value: newCustomerData.predicted_not_renewal,
+                                name: '预测不续保',
+                                itemStyle: { color: secondaryColor }
+                            }
+                        ]
+                    }
+                ],
+                graphic: [
+                    {
+                        type: 'text',
+                        left: 'center',
+                        top: 'center',
+                        style: {
+                            text: `${newCustomerData.renewal_rate.toFixed(0)}%`,
+                            fontSize: 32,
+                            fontWeight: 'bold',
+                            fill: '#38bdf8',
+                            textAlign: 'center',
+                            verticalAlign: 'middle'
+                        },
+                        z: 100
+                    },
+                    {
+                        type: 'text',
+                        left: '20%',
+                        top: '85%',
+                        style: {
+                            text: `预测续保: ${newCustomerData.predicted_renewal}人`,
+                            fontSize: 12,
+                            fill: '#38bdf8'
+                        },
+                        z: 100
+                    },
+                    {
+                        type: 'text',
+                        left: '60%',
+                        top: '85%',
+                        style: {
+                            text: `预测不续保: ${newCustomerData.predicted_not_renewal}人`,
+                            fontSize: 12,
+                            fill: '#f97316'
+                        },
+                        z: 100
+                    }
+                ]
+            });
+        }
+        
+        /**
+         * 配置新客户年龄分布图表
+         * @param {Object} data - 数据源
+         */
+        function configureNewCustomerAgeChart(data) {
+            const ageData = data.new_customer_analysis.age_analysis;
+            const ageGroups = ageData.map(item => item.age_group);
+            const renewalRates = ageData.map(item => item.renewal_rate);
+            
+            charts.newCustomerAgeChart.setOption({
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ageGroups,
+                    axisLabel: {
+                        color: '#94a3b8'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#334155'
+                        }
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    max: 100,
+                    axisLabel: {
+                        color: '#94a3b8',
+                        formatter: '{value}%'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#334155'
+                        }
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: '#334155',
+                            type: 'dashed'
+                        }
+                    }
+                },
+                series: [{
+                    data: renewalRates,
+                    type: 'bar',
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            {offset: 0, color: '#38bdf8'},
+                            {offset: 1, color: '#0ea5e9'}
+                        ])
+                    },
+                    label: {
+                        show: true,
+                        position: 'top',
+                        formatter: function(params) {
+                            return params.value.toFixed(1) + '%';
+                        },
+                        color: '#e5e7eb'
+                    }
+                }]
+            });
+        }
+        
+        /**
+         * 配置新客户婚姻状况图表
+         * @param {Object} data - 数据源
+         */
+        function configureNewCustomerMaritalChart(data) {
+            const maritalData = data.new_customer_analysis.marital_analysis;
+            const statuses = maritalData.map(item => item.status);
+            const renewalRates = maritalData.map(item => item.renewal_rate);
+            
+            charts.newCustomerMaritalChart.setOption({
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: statuses,
+                    axisLabel: {
+                        color: '#94a3b8'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#334155'
+                        }
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    max: 100,
+                    axisLabel: {
+                        color: '#94a3b8',
+                        formatter: '{value}%'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#334155'
+                        }
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: '#334155',
+                            type: 'dashed'
+                        }
+                    }
+                },
+                series: [{
+                    data: renewalRates,
+                    type: 'bar',
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            {offset: 0, color: '#f97316'},
+                            {offset: 1, color: '#fb923c'}
+                        ])
+                    },
+                    label: {
+                        show: true,
+                        position: 'top',
+                        formatter: function(params) {
+                            return params.value.toFixed(1) + '%';
+                        },
+                        color: '#e5e7eb'
+                    }
+                }]
+            });
+        }
+        
+        /**
+         * 加载数据并配置所有图表
+         */
+        function loadDataAndConfigureCharts() {
+            // 加载主要数据
+            fetch('/data')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Data:', data);
+                    configureRenewalChart(data);
+                    configureAgeChart(data);
+                    configureIncomeChart(data);
+                    configureGenderChart(data);
+                    configureLogisticChart(data);
+                    configureDecisionTreeChart(data);
+                    configureNewCustomerChart(data);
+                    configureNewCustomerAgeChart(data);
+                })
+                .catch(error => {
+                    console.error('Failed to load data:', error);
+                });
+            
+            // 单独加载职业分布数据
+            fetch('/occupation')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Occupation data:', data);
+                    configureOccupationChart(data);
+                })
+                .catch(error => {
+                    console.error('Failed to load occupation data:', error);
+                });
+        }
+        
+        /**
+         * 初始化应用
+         */
+        function initApp() {
+            // 初始化时间
+            updateTime();
+            setInterval(updateTime, 1000);
+            
+            // 初始化图表
+            initCharts();
+            
+            // 调整图表大小
+            resizeCharts();
+            window.addEventListener('resize', resizeCharts);
+            
+            // 加载数据并配置图表
+            loadDataAndConfigureCharts();
+        }
+        
+        // 页面加载完成后初始化应用
+        window.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+{
+  "renewal_distribution": [
+    { "status": "Yes", "count": 810 },
+    { "status": "No", "count": 190 }
+  ],
+  "age_distribution": [
+    { "age_group": "20-30", "count": 150 },
+    { "age_group": "30-40", "count": 200 },
+    { "age_group": "40-50", "count": 250 },
+    { "age_group": "50-60", "count": 200 },
+    { "age_group": "60+", "count": 200 }
+  ],
+  "logistic_coefficients": [
+    { "feature": "family_members", "coefficient": 0.7484 },
+    { "feature": "age", "coefficient": 0.0880 },
+    { "feature": "birth_region", "coefficient": 0.0461 },
+    { "feature": "policy_term", "coefficient": 0.0334 },
+    { "feature": "premium_amount", "coefficient": 0.0000 },
+    { "feature": "insurance_region", "coefficient": -0.0444 },
+    { "feature": "marital_status", "coefficient": -0.4358 },
+    { "feature": "occupation", "coefficient": -0.4673 },
+    { "feature": "education_level", "coefficient": -0.4677 },
+    { "feature": "gender", "coefficient": -0.6973 },
+    { "feature": "income_level", "coefficient": -2.0707 }
+  ],
+  "decision_tree_importance": [
+    { "feature": "age", "importance": 0.4511 },
+    { "feature": "marital_status", "importance": 0.2202 },
+    { "feature": "family_members", "importance": 0.1101 },
+    { "feature": "policy_term", "importance": 0.0500 },
+    { "feature": "birth_region", "importance": 0.0400 },
+    { "feature": "occupation", "importance": 0.0300 },
+    { "feature": "education_level", "importance": 0.0200 },
+    { "feature": "income_level", "importance": 0.0200 },
+    { "feature": "gender", "importance": 0.0100 },
+    { "feature": "insurance_region", "importance": 0.0100 },
+    { "feature": "premium_amount", "importance": 0.0000 }
+  ],
+  "new_customer_analysis": {
+    "total_customers": 200,
+    "predicted_renewal": 170,
+    "predicted_not_renewal": 30,
+    "renewal_rate": 85.0,
+    "age_analysis": [
+      { "age_group": "20-30", "renewal_rate": 60.0 },
+      { "age_group": "30-40", "renewal_rate": 75.0 },
+      { "age_group": "40-50", "renewal_rate": 80.0 },
+      { "age_group": "50-60", "renewal_rate": 90.0 },
+      { "age_group": "60+", "renewal_rate": 85.0 }
+    ],
+    "marital_analysis": [
+      { "status": "单身", "renewal_rate": 70.0 },
+      { "status": "已婚", "renewal_rate": 90.0 },
+      { "status": "其他", "renewal_rate": 65.0 }
+    ]
+  }
+}
